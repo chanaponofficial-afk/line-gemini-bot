@@ -19,6 +19,14 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 # ตั้งค่า Gemini SDK
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# รายชื่อโมเดลที่ต้องการใช้งาน
+MODELS = {
+    "default": "gemini-2.5-flash",  # โมเดลหลัก ตอบไว
+    "pro": "gemini-2.5-pro",        # โมเดลเน้นวิเคราะห์ลึก
+    "flash": "gemini-2.5-flash",
+    "lite": "gemini-2.5-flash-lite"
+}
+
 # ฟังก์ชันอ่านข้อมูลจากไฟล์ prompt.txt
 def load_system_instruction():
     if os.path.exists("prompt.txt"):
@@ -36,27 +44,53 @@ def index():
 def callback():
     signature = request.headers.get('X-Line-Signature')
     body = request.get_data(as_text=True)
+
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
+
     return 'OK'
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    user_text = event.message.text
+    user_text = event.message.text.strip()
+    selected_model = MODELS["default"]
+
+    # ระบบเลือกโมเดลด้วย Prefix (เช่น พิมพ์ /pro ตามด้วยข้อความ)
+    if user_text.startswith("/pro "):
+        selected_model = MODELS["pro"]
+        user_text = user_text[5:].strip()
+    elif user_text.startswith("/flash "):
+        selected_model = MODELS["flash"]
+        user_text = user_text[7:].strip()
+    elif user_text.startswith("/lite "):
+        selected_model = MODELS["lite"]
+        user_text = user_text[6:].strip()
+
     try:
-        # เรียกใช้ gemini-2.5-flash พร้อมแนบ system_instruction
         response = client.models.generate_content(
-            model='gemini-3.6-flash',
+            model=selected_model,
             contents=user_text,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION
             )
         )
         reply_text = response.text
+
     except Exception as e:
-        reply_text = f"เกิดข้อผิดพลาด: {str(e)}"
+        # Fallback: หากโมเดลที่เลือกมีปัญหา ให้สลับกลับมาใช้ gemini-2.5-flash อัตโนมัติ
+        try:
+            response = client.models.generate_content(
+                model=MODELS["default"],
+                contents=user_text,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION
+                )
+            )
+            reply_text = response.text
+        except Exception as fallback_error:
+            reply_text = f"เกิดข้อผิดพลาด: {str(fallback_error)}"
 
     # ส่งคำตอบกลับไปหาผู้ใช้ใน LINE
     line_bot_api.reply_message(
