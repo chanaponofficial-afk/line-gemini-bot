@@ -1,17 +1,17 @@
 import os
-from flask import Flask, request, abort
+from flask import Flask, abort, request
+from google import genai
+from google.genai import types
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-from google import genai
-from google.genai import types
 
 app = Flask(__name__)
 
 # ดึง Keys จาก Environment Variables
-LINE_CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
-LINE_CHANNEL_SECRET = os.environ.get('LINE_CHANNEL_SECRET')
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
+LINE_CHANNEL_SECRET = os.environ.get("LINE_CHANNEL_SECRET")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -19,13 +19,6 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 # ตั้งค่า Gemini SDK
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# รายชื่อโมเดลที่ต้องการใช้งาน
-MODELS = {
-    "default": "gemini-2.5-flash",  # โมเดลหลัก ตอบไว
-    "pro": "gemini-2.5-pro",        # โมเดลเน้นวิเคราะห์ลึก
-    "flash": "gemini-2.5-flash",
-    "lite": "gemini-2.5-flash-lite"
-}
 
 # ฟังก์ชันอ่านข้อมูลจากไฟล์ prompt.txt
 def load_system_instruction():
@@ -34,70 +27,48 @@ def load_system_instruction():
             return f.read()
     return ""
 
+
 SYSTEM_INSTRUCTION = load_system_instruction()
 
-@app.route("/", methods=['GET'])
+
+@app.route("/", methods=["GET"])
 def index():
-    return 'Bot is running!'
+    return "Bot is running!"
 
-@app.route("/callback", methods=['POST'])
+
+@app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers.get('X-Line-Signature')
+    signature = request.headers.get("X-Line-Signature")
     body = request.get_data(as_text=True)
-
     try:
         handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
+    return "OK"
 
-    return 'OK'
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    user_text = event.message.text.strip()
-    selected_model = MODELS["default"]
-
-    # ระบบเลือกโมเดลด้วย Prefix (เช่น พิมพ์ /pro ตามด้วยข้อความ)
-    if user_text.startswith("/pro "):
-        selected_model = MODELS["pro"]
-        user_text = user_text[5:].strip()
-    elif user_text.startswith("/flash "):
-        selected_model = MODELS["flash"]
-        user_text = user_text[7:].strip()
-    elif user_text.startswith("/lite "):
-        selected_model = MODELS["lite"]
-        user_text = user_text[6:].strip()
-
+    user_text = event.message.text
     try:
+        # เรียกใช้ gemini-3.5-flash-lite ตัวเดียวเท่านั้น
         response = client.models.generate_content(
-            model=selected_model,
+            model="gemini-3.5-flash-lite",
             contents=user_text,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION
-            )
+            ),
         )
         reply_text = response.text
-
     except Exception as e:
-        # Fallback: หากโมเดลที่เลือกมีปัญหา ให้สลับกลับมาใช้ gemini-2.5-flash อัตโนมัติ
-        try:
-            response = client.models.generate_content(
-                model=MODELS["default"],
-                contents=user_text,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION
-                )
-            )
-            reply_text = response.text
-        except Exception as fallback_error:
-            reply_text = f"เกิดข้อผิดพลาด: {str(fallback_error)}"
+        reply_text = f"เกิดข้อผิดพลาด: {str(e)}"
 
     # ส่งคำตอบกลับไปหาผู้ใช้ใน LINE
     line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_text)
+        event.reply_token, TextSendMessage(text=reply_text)
     )
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host="0.0.0.0", port=port)
