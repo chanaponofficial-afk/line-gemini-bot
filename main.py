@@ -37,9 +37,9 @@ def handle_message(event):
     user_text = event.message.text
     
     try:
-        # ส่งข้อความหา Gemini (ใช้โมเดลล่าสุด gemini-2.0-flash)
+        # ส่งข้อความหา Gemini (ใช้โมเดลล่าสุด gemini-3.6-flash)
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.6-flash',
             contents=user_text,
         )
         reply_text = response.text
