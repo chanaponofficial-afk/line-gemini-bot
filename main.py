@@ -48,7 +48,7 @@ def handle_message(event):
     try:
         # เรียกใช้ gemini-2.5-flash พร้อมแนบ system_instruction
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.6-flash',
             contents=user_text,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION
