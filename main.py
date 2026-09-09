@@ -51,7 +51,7 @@ def callback():
 def handle_message(event):
     user_text = event.message.text
     try:
-        # เรียกใช้ gemini-3.5-flash-lite ตัวเดียวเท่านั้น
+        # เรียกใช้ gemini-3.5-flash-lite (โควตาฟรีสูงสุด 500 ครั้ง/วัน)
         response = client.models.generate_content(
             model="gemini-3.5-flash-lite",
             contents=user_text,
@@ -61,7 +61,9 @@ def handle_message(event):
         )
         reply_text = response.text
     except Exception as e:
-        reply_text = f"เกิดข้อผิดพลาด: {str(e)}"
+        print(f"Error: {e}")
+        # ป้องกันไม่ให้ส่งข้อความ Error ของระบบไปหาลูกค้า
+        reply_text = "ขออภัยด้วยครับ ขณะนี้ระบบบอทยุ่งชั่วคราว โปรดลองใหม่อีกครั้งในภายหลัง"
 
     # ส่งคำตอบกลับไปหาผู้ใช้ใน LINE
     line_bot_api.reply_message(
