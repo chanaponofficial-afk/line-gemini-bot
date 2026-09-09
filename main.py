@@ -3,7 +3,7 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-from google import genai
+import google.generativeai as genai
 
 app = Flask(__name__)
 
@@ -14,7 +14,10 @@ GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
-client = genai.Client(api_key=GEMINI_API_KEY)
+
+# ตั้งค่า Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 @app.route("/", methods=['GET'])
 def index():
@@ -34,16 +37,17 @@ def callback():
 def handle_message(event):
     user_text = event.message.text
     
-    # ส่งข้อความหา Gemini
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=user_text,
-    )
+    try:
+        # ส่งข้อความหา Gemini
+        response = model.generate_content(user_text)
+        reply_text = response.text
+    except Exception as e:
+        reply_text = f"เกิดข้อผิดพลาด: {str(e)}"
     
     # ส่งคำตอบกลับไปหาผู้ใช้ใน LINE
     line_bot_api.reply_message(
         event.reply_token,
-        TextSendMessage(text=response.text)
+        TextSendMessage(text=reply_text)
     )
 
 if __name__ == "__main__":
